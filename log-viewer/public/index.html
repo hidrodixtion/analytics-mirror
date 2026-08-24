@@ -21,8 +21,12 @@
     background: var(--bg); color: var(--fg);
     font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
   }
-  header { display: flex; gap: 8px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--line); }
-  header input { flex: 1; min-width: 0; }
+  header { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  header input { flex: 1; min-width: 120px; }
+  #types { display: flex; gap: 4px; }
+  #types button[data-t="track"][aria-pressed="false"] { color: var(--str); }
+  #types button[data-t="screen"][aria-pressed="false"] { color: var(--num); }
+  #types button[data-t="identify"][aria-pressed="false"] { color: var(--key); }
   input, button {
     font: inherit; color: var(--fg); background: var(--panel);
     border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px;
@@ -31,7 +35,7 @@
   button:hover { border-color: var(--accent); }
   button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
   #count { color: var(--dim); white-space: nowrap; }
-  main { flex: 1; display: grid; grid-template-columns: minmax(240px, 340px) 1fr; min-height: 0; }
+  main { flex: 1; display: grid; grid-template-columns: minmax(312px, 442px) 1fr; min-height: 0; }
   #list { overflow-y: auto; border-right: 1px solid var(--line); }
   #list div {
     padding: 8px 12px; border-bottom: 1px solid var(--line);
@@ -42,6 +46,9 @@
   #list div[aria-selected="true"] .type, #list div[aria-selected="true"] time { color: #dbe1ff; }
   #list .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .type { color: var(--dim); font-size: 11px; text-transform: uppercase; }
+  .type[data-t="track"] { color: var(--str); }
+  .type[data-t="screen"] { color: var(--num); }
+  .type[data-t="identify"] { color: var(--key); }
   time { color: var(--dim); font-size: 11px; }
   #detail { overflow-y: auto; padding: 14px 16px; }
   #detail h2 { margin: 0 0 4px; font-size: 15px; }
@@ -49,7 +56,18 @@
   table { border-collapse: collapse; width: 100%; }
   td { padding: 3px 8px 3px 0; vertical-align: top; border-bottom: 1px solid var(--line); }
   td:first-child { color: var(--key); width: 1%; white-space: nowrap; }
-  td:last-child { word-break: break-word; }
+  td.val { word-break: break-word; }
+  td.act { width: 1%; padding-right: 0; text-align: right; }
+  .copy {
+    background: none; border: 0; padding: 0 4px; border-radius: 4px;
+    color: var(--dim); font-size: 11px; text-transform: none; letter-spacing: 0;
+  }
+  .copy:hover { color: var(--fg); border-color: transparent; }
+  .copy.ok { color: var(--str); }
+  .copy.err { color: var(--num); }
+  h3 .copy { margin-left: 8px; }
+  td.act .copy { opacity: 0; transition: opacity .1s; }
+  tr:hover .copy, .copy:focus-visible, .copy.ok, .copy.err { opacity: 1; }
   .s { color: var(--str); } .n { color: var(--num); } .d { color: var(--dim); }
   details { margin-top: 18px; }
   summary { cursor: pointer; color: var(--dim); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
@@ -62,6 +80,12 @@
   <strong>Analytics mirror</strong>
   <span id="count">0</span>
   <input id="q" type="search" placeholder="Filter by name, type, or any value…">
+  <div id="types">
+    <button data-t="all" aria-pressed="true">All</button>
+    <button data-t="track" aria-pressed="false">Track</button>
+    <button data-t="screen" aria-pressed="false">Screen</button>
+    <button data-t="identify" aria-pressed="false">Identify</button>
+  </div>
   <button id="pause" aria-pressed="false">Pause</button>
   <button id="clear">Clear</button>
 </header>
@@ -76,11 +100,13 @@ const detailEl = document.querySelector('#detail')
 const countEl = document.querySelector('#count')
 const qEl = document.querySelector('#q')
 const pauseEl = document.querySelector('#pause')
+const typesEl = document.querySelector('#types')
 
 let events = []
 let seq = 0
 let selectedId = null
 let paused = false
+let typeFilter = 'all'
 
 const add = (e) => events.push({ ...e, id: ++seq })
 
@@ -96,10 +122,15 @@ const matches = (e, q) =>
      || (e.payload.type || '').toLowerCase().includes(q)
      || JSON.stringify(e.payload).toLowerCase().includes(q)
 
+const typeOf = (e) => (e.payload.type || '').toLowerCase()
+
 function render() {
   const q = qEl.value.trim().toLowerCase()
-  const shown = events.filter(e => matches(e, q)).reverse()
-  countEl.textContent = q ? `${shown.length}/${events.length}` : events.length
+  const shown = events
+    .filter(e => (typeFilter === 'all' || typeOf(e) === typeFilter) && matches(e, q))
+    .reverse()
+  const filtered = q || typeFilter !== 'all'
+  countEl.textContent = filtered ? `${shown.length}/${events.length}` : events.length
 
   listEl.replaceChildren(...shown.map(e => {
     const row = document.createElement('div')
@@ -108,7 +139,9 @@ function render() {
     row.innerHTML =
       `<span class="name"></span><span class="type"></span><time></time>`
     row.querySelector('.name').textContent = e.payload.event || e.payload.name || e.payload.type || '—'
-    row.querySelector('.type').textContent = e.payload.type || ''
+    const t = row.querySelector('.type')
+    t.textContent = e.payload.type || ''
+    t.dataset.t = typeOf(e)
     row.querySelector('time').textContent = new Date(e.at).toLocaleTimeString()
     return row
   }))
@@ -124,25 +157,71 @@ function fmt(v) {
 }
 const esc = (s) => String(s).replace(/[<&]/g, c => ({ '<': '&lt;', '&': '&amp;' })[c])
 
+// Raw (unquoted, unescaped) text for the clipboard, indexed by data-i on each button.
+let copyBuf = []
+const stash = (text) => copyBuf.push(text) - 1
+const copyBtn = (text, label) => `<button class="copy" data-i="${stash(text)}">${label}</button>`
+const raw = (v) => typeof v === 'string' ? v : JSON.stringify(v)
+
 function table(obj) {
   const keys = Object.keys(obj || {}).sort()
   if (!keys.length) return '<p class="d">(empty)</p>'
-  return `<table>${keys.map(k => `<tr><td>${esc(k)}</td><td>${fmt(obj[k])}</td></tr>`).join('')}</table>`
+  return `<table>${keys.map(k =>
+    `<tr><td>${esc(k)}</td><td class="val">${fmt(obj[k])}</td>` +
+    `<td class="act">${copyBtn(raw(obj[k]), 'copy')}</td></tr>`
+  ).join('')}</table>`
 }
+
+const section = (title, obj) =>
+  `<h3>${title}${copyBtn(JSON.stringify(obj, null, 2), 'copy all')}</h3>${table(obj)}`
 
 function renderDetail(e) {
   if (!e) { detailEl.className = 'empty'; detailEl.textContent = 'Select an event'; return }
   detailEl.className = ''
   const p = e.payload
+  copyBuf = []
   const sections = []
-  if (p.properties) sections.push(`<h3>properties</h3>${table(p.properties)}`)
-  if (p.traits) sections.push(`<h3>traits</h3>${table(p.traits)}`)
-  if (p.context?.traits) sections.push(`<h3>context.traits</h3>${table(p.context.traits)}`)
+  if (p.properties) sections.push(section('properties', p.properties))
+  if (p.traits) sections.push(section('traits', p.traits))
+  if (p.context?.traits) sections.push(section('context.traits', p.context.traits))
   detailEl.innerHTML = `
     <h2>${esc(p.event || p.name || p.type || 'event')}</h2>
     <div class="d">${esc(p.type || '')} · ${new Date(e.at).toLocaleTimeString()} · ${esc(p.userId || p.anonymousId || '')}</div>
     ${sections.join('') || '<p class="d">No properties or traits.</p>'}
     <details><summary>Full envelope</summary><pre>${esc(JSON.stringify(p, null, 2))}</pre></details>`
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text)
+    return true
+  } catch {
+    // Clipboard API is gated off in embedded webviews and on plain-http origins.
+    // execCommand is deprecated but needs no permission grant, only a user gesture.
+    const ta = document.body.appendChild(document.createElement('textarea'))
+    ta.value = text
+    ta.style.cssText = 'position:fixed;top:-9999px'
+    ta.select()
+    const ok = document.execCommand('copy')
+    ta.remove()
+    return ok
+  }
+}
+
+detailEl.onclick = async (ev) => {
+  const b = ev.target.closest('.copy')
+  if (!b) return
+  const cls = await copyText(copyBuf[b.dataset.i]) ? 'ok' : 'err'
+  b.classList.add(cls)
+  setTimeout(() => b.classList.remove(cls), 900)
+}
+
+typesEl.onclick = (ev) => {
+  const b = ev.target.closest('button')
+  if (!b) return
+  typeFilter = b.dataset.t
+  for (const x of typesEl.children) x.setAttribute('aria-pressed', x === b)
+  render()
 }
 
 qEl.oninput = render
