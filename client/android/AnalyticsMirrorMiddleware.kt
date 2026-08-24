@@ -8,8 +8,8 @@ import java.util.concurrent.Executors
 import timber.log.Timber
 
 /**
- * Mirrors every HighTouch event to a local log-viewer app over plain HTTP. Pass-through: the payload is handed to the next
- * middleware untouched.
+ * Mirrors every HighTouch event to a local log-viewer app over plain HTTP. Pass-through: the
+ * payload is handed to the next middleware untouched.
  *
  * Debug builds only:
  *

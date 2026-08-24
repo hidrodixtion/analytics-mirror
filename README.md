@@ -33,9 +33,9 @@ Nothing is persisted. Stop the server and the events are gone.
 HTTP.** Those payloads routinely carry email addresses, user IDs, session
 identifiers and behavioural history. Two rules follow:
 
-1. **Never ship the client plugin in a production build.** The supplied Swift
-   plugin is wrapped in `#if DEBUG` for exactly this reason. Keep it
-   that way.
+1. **Never ship the client plugin in a production build.** The Swift plugin is
+   wrapped in `#if DEBUG` for exactly this reason, and the Android middleware
+   is registered behind `BuildConfig.DEBUG`. Keep it that way.
 2. **The server binds to loopback by default.** Opening it to your LAN with
    `HOST=0.0.0.0` means anyone on that network can read your event stream and
    clear your buffer — there is no authentication. Only do it on a network you
@@ -126,20 +126,24 @@ Simulator needs neither and a device fails silently without them:
 
 ## Android integration (Hightouch)
 
-Put [`client/android/AnalyticsMirrorMiddleware.kt`](client/android/AnalyticsMirrorMiddleware.kt)
-in your **debug source set** — `src/debug/java/` — rather than `src/main/`.
-Kotlin has no `#if DEBUG`, so the source set *is* the guard: the class then
-cannot be compiled into a release build at all, which is the same protection
-the iOS plugin gets from its `#if`. Registering it behind a `BuildConfig.DEBUG`
-check alone would still ship the class.
-
-Register it as a source middleware where you build your `Analytics` instance:
+Add [`client/android/AnalyticsMirrorMiddleware.kt`](client/android/AnalyticsMirrorMiddleware.kt)
+to your project and register it as a source middleware, behind a
+`BuildConfig.DEBUG` check. Kotlin has no `#if DEBUG`, so this check is what
+keeps the mirror out of a release build:
 
 ```kotlin
-Analytics.Builder(context, writeKey)
-    .useSourceMiddleware(AnalyticsMirrorMiddleware(context))
-    .build()
+val builder = Analytics.Builder(context, writeKey)
+
+if (BuildConfig.DEBUG) {
+    builder.useSourceMiddleware(AnalyticsMirrorMiddleware(context))
+}
+
+val analytics = builder.build()
 ```
+
+If you would rather the class not exist in a release build at all, put the file
+in your debug source set (`src/debug/java/`) instead — that is the closest
+Android equivalent to the iOS `#if`.
 
 The middleware needs `android.permission.INTERNET`, which an app sending
 analytics will already hold.
