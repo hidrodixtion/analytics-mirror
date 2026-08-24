@@ -21,8 +21,9 @@ Three moving parts, no build step, one dependency:
   Server-Sent Events.
 - **The viewer** ([log-viewer/public/index.html](log-viewer/public/index.html))
   is a single static HTML file. No bundler, no framework.
-- **A client plugin** forwards events from your app. An iOS one for the
-  Hightouch SDK ships in [`client plugin/`](client%20plugin/plugin.swift).
+- **A client plugin** forwards events from your app. Two ship here, both for
+  the Hightouch SDK: [iOS](client/ios/AnalyticsMirrorPlugin.swift) and
+  [Android](client/android/AnalyticsMirrorMiddleware.kt).
 
 Nothing is persisted. Stop the server and the events are gone.
 
@@ -32,9 +33,9 @@ Nothing is persisted. Stop the server and the events are gone.
 HTTP.** Those payloads routinely carry email addresses, user IDs, session
 identifiers and behavioural history. Two rules follow:
 
-1. **Never ship the client plugin in a production build.** The supplied Swift
-   plugin is wrapped in `#if DEBUG || STAGING` for exactly this reason. Keep it
-   that way.
+1. **Never ship the client plugin in a production build.** The Swift plugin is
+   wrapped in `#if DEBUG` for exactly this reason, and the Android middleware
+   is registered behind `BuildConfig.DEBUG`. Keep it that way.
 2. **The server binds to loopback by default.** Opening it to your LAN with
    `HOST=0.0.0.0` means anyone on that network can read your event stream and
    clear your buffer — there is no authentication. Only do it on a network you
@@ -84,21 +85,17 @@ toggle governs the clipboard too.
 
 ## iOS integration (Hightouch)
 
-Add [`client plugin/plugin.swift`](client%20plugin/plugin.swift) to your target
-and register it:
+Add [`client/ios/AnalyticsMirrorPlugin.swift`](client/ios/AnalyticsMirrorPlugin.swift)
+to your target and register it:
 
 ```swift
-#if DEBUG || STAGING
-analytics.add(plugin: AnalyticsMirrorPlugin())
+#if DEBUG
+  analytics.add(plugin: AnalyticsMirrorPlugin())
 #endif
 ```
 
 The `#if` around the call site is **required**, not decoration: the plugin type
 does not exist in a Release build, so an unguarded call fails to compile.
-
-If you use the `STAGING` half of that condition, add `STAGING` to
-`SWIFT_ACTIVE_COMPILATION_CONDITIONS` for that configuration. It is not a
-built-in flag — without it the guard quietly means DEBUG-only.
 
 ### Running against a physical device
 
@@ -127,10 +124,71 @@ Simulator needs neither and a device fails silently without them:
 <string>Mirrors analytics events to a local viewer during development.</string>
 ```
 
+## Android integration (Hightouch)
+
+Add [`client/android/AnalyticsMirrorMiddleware.kt`](client/android/AnalyticsMirrorMiddleware.kt)
+to your project and register it as a source middleware, behind a
+`BuildConfig.DEBUG` check. Kotlin has no `#if DEBUG`, so this check is what
+keeps the mirror out of a release build:
+
+```kotlin
+val builder = Analytics.Builder(context, writeKey)
+
+if (BuildConfig.DEBUG) {
+    builder.useSourceMiddleware(AnalyticsMirrorMiddleware(context))
+}
+
+val analytics = builder.build()
+```
+
+If you would rather the class not exist in a release build at all, put the file
+in your debug source set (`src/debug/java/`) instead — that is the closest
+Android equivalent to the iOS `#if`.
+
+The middleware needs `android.permission.INTERNET`, which an app sending
+analytics will already hold.
+
+### Running against a physical device
+
+The emulator needs nothing: its default host `10.0.2.2` is an alias for your
+machine's loopback, so it reaches the server on the default `HOST=127.0.0.1`.
+A real device needs three changes, mirroring the iOS ones.
+
+**1.** Start the server with `HOST=0.0.0.0`.
+
+**2.** Point the middleware at your machine's LAN address:
+
+```kotlin
+middleware.host = "192.168.1.42:9977"
+```
+
+**3.** Permit cleartext to that host. Android has blocked cleartext HTTP by
+default since Android 9, so without this the POST fails — look for the
+`Failed to mirror analytics event` warning the middleware logs. Add
+`src/debug/res/xml/network_security_config.xml`:
+
+```xml
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain>10.0.2.2</domain>
+        <domain>192.168.1.42</domain>
+    </domain-config>
+</network-security-config>
+```
+
+and point your **debug** manifest at it:
+
+```xml
+<application android:networkSecurityConfig="@xml/network_security_config" />
+```
+
+Scoping it to named domains in a debug-only manifest keeps cleartext off for
+everything else, and keeps the exemption out of your release build entirely.
+
 ## HTTP API
 
-Any client that can POST JSON works — the iOS plugin is a convenience, not a
-requirement.
+Any client that can POST JSON works — the bundled plugins are a convenience,
+not a requirement.
 
 | | | |
 |---|---|---|

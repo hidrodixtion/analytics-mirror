@@ -1,4 +1,4 @@
-#if DEBUG || STAGING    // Only add this plugin in debug or staging builds, not production.
+#if DEBUG    // Only add this plugin in debug or staging builds (by adding || STAGING), not production.
 import Foundation
 import Hightouch
 

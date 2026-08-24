@@ -1,14 +1,33 @@
 {
   "name": "analytics-mirror",
   "version": "1.0.0",
-  "description": "",
+  "description": "Local mirror for analytics events — see what your app sends, the moment it sends it.",
+  "keywords": [
+    "analytics",
+    "debugging",
+    "devtool",
+    "events",
+    "hightouch",
+    "segment",
+    "sse",
+    "ios"
+  ],
+  "homepage": "https://github.com/hidrodixtion/analytics-mirror#readme",
+  "bugs": "https://github.com/hidrodixtion/analytics-mirror/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hidrodixtion/analytics-mirror.git",
+    "directory": "log-viewer"
+  },
   "license": "MIT",
   "author": "Adi Nugroho",
   "type": "commonjs",
   "main": "index.js",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
-    "start": "node index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node index.js"
   },
   "dependencies": {
     "express": "^5.2.1"
