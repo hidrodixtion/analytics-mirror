@@ -128,8 +128,7 @@ Simulator needs neither and a device fails silently without them:
 
 Add [`client/android/AnalyticsMirrorMiddleware.kt`](client/android/AnalyticsMirrorMiddleware.kt)
 to your project and register it as a source middleware, behind a
-`BuildConfig.DEBUG` check. Kotlin has no `#if DEBUG`, so this check is what
-keeps the mirror out of a release build:
+`BuildConfig.DEBUG` check.
 
 ```kotlin
 val builder = Analytics.Builder(context, writeKey)
@@ -142,8 +141,7 @@ val analytics = builder.build()
 ```
 
 If you would rather the class not exist in a release build at all, put the file
-in your debug source set (`src/debug/java/`) instead — that is the closest
-Android equivalent to the iOS `#if`.
+in your debug source set (`src/debug/java/`) instead.
 
 The middleware needs `android.permission.INTERNET`, which an app sending
 analytics will already hold.
