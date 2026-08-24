@@ -2,18 +2,16 @@
 
 See the analytics events your app sends, the moment it sends them.
 
-Point your app's analytics SDK at a small local server and every event shows up
+Point your app's analytics SDK (Hightouch) at a small local server and every event shows up
 in a browser tab instantly — full properties, traits and envelope — instead of
 waiting on a vendor dashboard that batches, samples, and lags by minutes.
 
-<!-- Add a screenshot here once you have one: ![The event viewer](docs/screenshot.png) -->
+![The event viewer](docs/SCR-20260824-ndkux.png)
 
 ## How it works
 
 ```
-your app  ──POST /event──►  local server  ──SSE /stream──►  browser viewer
-                            (ring buffer,
-                             last 2000 events)
+your app  ── POST /event ──►  local server  ── SSE /stream ──►  browser viewer (ring buffer, last 2000 events)
 ```
 
 Three moving parts, no build step, one dependency:
