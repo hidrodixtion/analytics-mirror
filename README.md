@@ -21,8 +21,9 @@ Three moving parts, no build step, one dependency:
   Server-Sent Events.
 - **The viewer** ([log-viewer/public/index.html](log-viewer/public/index.html))
   is a single static HTML file. No bundler, no framework.
-- **A client plugin** forwards events from your app. An iOS one for the
-  Hightouch SDK ships in [`client/ios/`](client/ios/AnalyticsMirrorPlugin.swift).
+- **A client plugin** forwards events from your app. Two ship here, both for
+  the Hightouch SDK: [iOS](client/ios/AnalyticsMirrorPlugin.swift) and
+  [Android](client/android/AnalyticsMirrorMiddleware.kt).
 
 Nothing is persisted. Stop the server and the events are gone.
 
@@ -123,10 +124,67 @@ Simulator needs neither and a device fails silently without them:
 <string>Mirrors analytics events to a local viewer during development.</string>
 ```
 
+## Android integration (Hightouch)
+
+Put [`client/android/AnalyticsMirrorMiddleware.kt`](client/android/AnalyticsMirrorMiddleware.kt)
+in your **debug source set** — `src/debug/java/` — rather than `src/main/`.
+Kotlin has no `#if DEBUG`, so the source set *is* the guard: the class then
+cannot be compiled into a release build at all, which is the same protection
+the iOS plugin gets from its `#if`. Registering it behind a `BuildConfig.DEBUG`
+check alone would still ship the class.
+
+Register it as a source middleware where you build your `Analytics` instance:
+
+```kotlin
+Analytics.Builder(context, writeKey)
+    .useSourceMiddleware(AnalyticsMirrorMiddleware(context))
+    .build()
+```
+
+The middleware needs `android.permission.INTERNET`, which an app sending
+analytics will already hold.
+
+### Running against a physical device
+
+The emulator needs nothing: its default host `10.0.2.2` is an alias for your
+machine's loopback, so it reaches the server on the default `HOST=127.0.0.1`.
+A real device needs three changes, mirroring the iOS ones.
+
+**1.** Start the server with `HOST=0.0.0.0`.
+
+**2.** Point the middleware at your machine's LAN address:
+
+```kotlin
+middleware.host = "192.168.1.42:9977"
+```
+
+**3.** Permit cleartext to that host. Android has blocked cleartext HTTP by
+default since Android 9, so without this the POST fails — look for the
+`Failed to mirror analytics event` warning the middleware logs. Add
+`src/debug/res/xml/network_security_config.xml`:
+
+```xml
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain>10.0.2.2</domain>
+        <domain>192.168.1.42</domain>
+    </domain-config>
+</network-security-config>
+```
+
+and point your **debug** manifest at it:
+
+```xml
+<application android:networkSecurityConfig="@xml/network_security_config" />
+```
+
+Scoping it to named domains in a debug-only manifest keeps cleartext off for
+everything else, and keeps the exemption out of your release build entirely.
+
 ## HTTP API
 
-Any client that can POST JSON works — the iOS plugin is a convenience, not a
-requirement.
+Any client that can POST JSON works — the bundled plugins are a convenience,
+not a requirement.
 
 | | | |
 |---|---|---|

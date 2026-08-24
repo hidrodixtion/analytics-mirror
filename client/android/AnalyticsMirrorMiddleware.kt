@@ -8,9 +8,12 @@ import java.util.concurrent.Executors
 import timber.log.Timber
 
 /**
- * Mirrors every HighTouch event to a local log-viewer app over plain HTTP. Debug builds only, see
- * where [HighTouchAnalyticsTracker] registers it. Pass-through: the payload is handed to the next
+ * Mirrors every HighTouch event to a local log-viewer app over plain HTTP. Pass-through: the payload is handed to the next
  * middleware untouched.
+ *
+ * Debug builds only:
+ *
+ * if (BuildConfig.DEBUG) useSourceMiddleware(AnalyticsMirrorMiddleware(context))
  *
  * The default host is the emulator alias for the host machine's loopback. On a physical device
  * point it at the Mac's LAN IP: `middleware.host = "192.168.1.42:9977"`.
