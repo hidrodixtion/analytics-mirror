@@ -59,16 +59,18 @@
   td.val { word-break: break-word; }
   td.act { width: 1%; padding-right: 0; text-align: right; }
   .copy {
-    background: none; border: 0; padding: 0 4px; border-radius: 4px;
-    color: var(--dim); font-size: 11px; text-transform: none; letter-spacing: 0;
+    background: none; border: 0; padding: 2px 4px 0; border-radius: 4px;
+    color: var(--dim); line-height: 0;
   }
   .copy:hover { color: var(--fg); border-color: transparent; }
   .copy.ok { color: var(--str); }
   .copy.err { color: var(--num); }
-  h3 .copy { margin-left: 8px; }
+  h3 .copy { margin-left: 6px; vertical-align: -3px; }
   td.act .copy { opacity: 0; transition: opacity .1s; }
   tr:hover .copy, .copy:focus-visible, .copy.ok, .copy.err { opacity: 1; }
   .s { color: var(--str); } .n { color: var(--num); } .d { color: var(--dim); }
+  /* Wrap at spaces so indentation survives; let an unbreakable token scroll rather than shatter. */
+  pre.json { margin: 0; white-space: pre-wrap; overflow-x: auto; color: var(--dim); }
   details { margin-top: 18px; }
   summary { cursor: pointer; color: var(--dim); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
   pre { margin: 8px 0 0; white-space: pre-wrap; word-break: break-word; color: var(--dim); }
@@ -86,6 +88,7 @@
     <button data-t="screen" aria-pressed="false">Screen</button>
     <button data-t="identify" aria-pressed="false">Identify</button>
   </div>
+  <button id="pretty" aria-pressed="true">Pretty</button>
   <button id="pause" aria-pressed="false">Pause</button>
   <button id="clear">Clear</button>
 </header>
@@ -101,12 +104,16 @@ const countEl = document.querySelector('#count')
 const qEl = document.querySelector('#q')
 const pauseEl = document.querySelector('#pause')
 const typesEl = document.querySelector('#types')
+const prettyEl = document.querySelector('#pretty')
 
 let events = []
 let seq = 0
 let selectedId = null
+let scrolledId = null
 let paused = false
 let typeFilter = 'all'
+let pretty = true
+let shown = []   // what the list currently displays, in display order — drives arrow-key nav
 
 const add = (e) => events.push({ ...e, id: ++seq })
 
@@ -126,7 +133,7 @@ const typeOf = (e) => (e.payload.type || '').toLowerCase()
 
 function render() {
   const q = qEl.value.trim().toLowerCase()
-  const shown = events
+  shown = events
     .filter(e => (typeFilter === 'all' || typeOf(e) === typeFilter) && matches(e, q))
     .reverse()
   const filtered = q || typeFilter !== 'all'
@@ -146,34 +153,45 @@ function render() {
     return row
   }))
 
+  // Keep the selected row visible for arrow-key nav, but don't yank the scroll
+  // position while events stream in and re-render underneath the user.
+  if (selectedId !== scrolledId) {
+    listEl.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' })
+    scrolledId = selectedId
+  }
+
   renderDetail(events.find(e => e.id === selectedId))
 }
+
+const json = (v) => JSON.stringify(v, null, pretty ? 2 : 0)
 
 function fmt(v) {
   if (typeof v === 'string') return `<span class="s">"${esc(v)}"</span>`
   if (typeof v === 'number' || typeof v === 'boolean') return `<span class="n">${v}</span>`
   if (v === null || v === undefined) return `<span class="d">${v}</span>`
-  return `<span class="d">${esc(JSON.stringify(v))}</span>`
+  return `<pre class="json">${esc(json(v))}</pre>`
 }
 const esc = (s) => String(s).replace(/[<&]/g, c => ({ '<': '&lt;', '&': '&amp;' })[c])
 
 // Raw (unquoted, unescaped) text for the clipboard, indexed by data-i on each button.
+// Objects copy exactly as displayed, so the Pretty toggle governs the clipboard too.
 let copyBuf = []
 const stash = (text) => copyBuf.push(text) - 1
-const copyBtn = (text, label) => `<button class="copy" data-i="${stash(text)}">${label}</button>`
-const raw = (v) => typeof v === 'string' ? v : JSON.stringify(v)
+const ICON = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></svg>'
+const copyBtn = (text, label) => `<button class="copy" title="${label}" aria-label="${label}" data-i="${stash(text)}">${ICON}</button>`
+const raw = (v) => typeof v === 'string' ? v : json(v)
 
 function table(obj) {
   const keys = Object.keys(obj || {}).sort()
   if (!keys.length) return '<p class="d">(empty)</p>'
   return `<table>${keys.map(k =>
     `<tr><td>${esc(k)}</td><td class="val">${fmt(obj[k])}</td>` +
-    `<td class="act">${copyBtn(raw(obj[k]), 'copy')}</td></tr>`
+    `<td class="act">${copyBtn(raw(obj[k]), 'Copy value')}</td></tr>`
   ).join('')}</table>`
 }
 
 const section = (title, obj) =>
-  `<h3>${title}${copyBtn(JSON.stringify(obj, null, 2), 'copy all')}</h3>${table(obj)}`
+  `<h3>${title}${copyBtn(JSON.stringify(obj, null, 2), `Copy all ${title}`)}</h3>${table(obj)}`
 
 function renderDetail(e) {
   if (!e) { detailEl.className = 'empty'; detailEl.textContent = 'Select an event'; return }
@@ -214,6 +232,26 @@ detailEl.onclick = async (ev) => {
   const cls = await copyText(copyBuf[b.dataset.i]) ? 'ok' : 'err'
   b.classList.add(cls)
   setTimeout(() => b.classList.remove(cls), 900)
+}
+
+document.onkeydown = (ev) => {
+  const step = { ArrowDown: 1, ArrowUp: -1 }[ev.key]
+  if (!step || ev.metaKey || ev.ctrlKey || ev.altKey) return
+  if (ev.target.closest('input, textarea, select')) return   // let fields keep their own arrows
+  if (!shown.length) return
+  ev.preventDefault()
+
+  const i = shown.findIndex(e => e.id === selectedId)
+  const next = i === -1 ? (step > 0 ? 0 : shown.length - 1) : i + step
+  if (next < 0 || next >= shown.length) return   // stop at the ends rather than wrapping
+  selectedId = shown[next].id
+  render()
+}
+
+prettyEl.onclick = () => {
+  pretty = !pretty
+  prettyEl.setAttribute('aria-pressed', pretty)
+  render()
 }
 
 typesEl.onclick = (ev) => {
