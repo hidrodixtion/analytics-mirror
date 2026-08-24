@@ -22,7 +22,7 @@ Three moving parts, no build step, one dependency:
 - **The viewer** ([log-viewer/public/index.html](log-viewer/public/index.html))
   is a single static HTML file. No bundler, no framework.
 - **A client plugin** forwards events from your app. An iOS one for the
-  Hightouch SDK ships in [`client plugin/`](client%20plugin/plugin.swift).
+  Hightouch SDK ships in [`client/ios/`](client/ios/AnalyticsMirrorPlugin.swift).
 
 Nothing is persisted. Stop the server and the events are gone.
 
@@ -33,7 +33,7 @@ HTTP.** Those payloads routinely carry email addresses, user IDs, session
 identifiers and behavioural history. Two rules follow:
 
 1. **Never ship the client plugin in a production build.** The supplied Swift
-   plugin is wrapped in `#if DEBUG || STAGING` for exactly this reason. Keep it
+   plugin is wrapped in `#if DEBUG` for exactly this reason. Keep it
    that way.
 2. **The server binds to loopback by default.** Opening it to your LAN with
    `HOST=0.0.0.0` means anyone on that network can read your event stream and
@@ -84,21 +84,17 @@ toggle governs the clipboard too.
 
 ## iOS integration (Hightouch)
 
-Add [`client plugin/plugin.swift`](client%20plugin/plugin.swift) to your target
-and register it:
+Add [`client/ios/AnalyticsMirrorPlugin.swift`](client/ios/AnalyticsMirrorPlugin.swift)
+to your target and register it:
 
 ```swift
-#if DEBUG || STAGING
-analytics.add(plugin: AnalyticsMirrorPlugin())
+#if DEBUG
+  analytics.add(plugin: AnalyticsMirrorPlugin())
 #endif
 ```
 
 The `#if` around the call site is **required**, not decoration: the plugin type
 does not exist in a Release build, so an unguarded call fails to compile.
-
-If you use the `STAGING` half of that condition, add `STAGING` to
-`SWIFT_ACTIVE_COMPILATION_CONDITIONS` for that configuration. It is not a
-built-in flag — without it the guard quietly means DEBUG-only.
 
 ### Running against a physical device
 
