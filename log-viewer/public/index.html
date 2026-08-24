@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Analytics mirror</title>
+<title>Analytics Mirror</title>
 <style>
   :root {
     --bg: #14161a; --panel: #1b1e24; --line: #2b3038; --fg: #e6e9ef;
@@ -65,7 +65,7 @@
   .copy:hover { color: var(--fg); border-color: transparent; }
   .copy.ok { color: var(--str); }
   .copy.err { color: var(--num); }
-  h3 .copy { margin-left: 6px; vertical-align: -3px; }
+  h3 .copy, summary .copy { margin-left: 6px; vertical-align: -3px; }
   td.act .copy { opacity: 0; transition: opacity .1s; }
   tr:hover .copy, .copy:focus-visible, .copy.ok, .copy.err { opacity: 1; }
   .s { color: var(--str); } .n { color: var(--num); } .d { color: var(--dim); }
@@ -79,7 +79,7 @@
 </head>
 <body>
 <header>
-  <strong>Analytics mirror</strong>
+  <strong>Analytics Mirror</strong>
   <span id="count">0</span>
   <input id="q" type="search" placeholder="Filter by name, type, or any value…">
   <div id="types">
@@ -197,6 +197,7 @@ function renderDetail(e) {
   if (!e) { detailEl.className = 'empty'; detailEl.textContent = 'Select an event'; return }
   detailEl.className = ''
   const p = e.payload
+  const envelope = JSON.stringify(p, null, 2)   // serialised once: shown and copied must agree
   copyBuf = []
   const sections = []
   if (p.properties) sections.push(section('properties', p.properties))
@@ -206,7 +207,10 @@ function renderDetail(e) {
     <h2>${esc(p.event || p.name || p.type || 'event')}</h2>
     <div class="d">${esc(p.type || '')} · ${new Date(e.at).toLocaleTimeString()} · ${esc(p.userId || p.anonymousId || '')}</div>
     ${sections.join('') || '<p class="d">No properties or traits.</p>'}
-    <details><summary>Full envelope</summary><pre>${esc(JSON.stringify(p, null, 2))}</pre></details>`
+    <details>
+      <summary>Full envelope${copyBtn(envelope, 'Copy full envelope')}</summary>
+      <pre>${esc(envelope)}</pre>
+    </details>`
 }
 
 async function copyText(text) {
@@ -229,6 +233,7 @@ async function copyText(text) {
 detailEl.onclick = async (ev) => {
   const b = ev.target.closest('.copy')
   if (!b) return
+  ev.preventDefault()   // the envelope button sits inside <summary>; don't toggle the disclosure
   const cls = await copyText(copyBuf[b.dataset.i]) ? 'ok' : 'err'
   b.classList.add(cls)
   setTimeout(() => b.classList.remove(cls), 900)
